@@ -448,6 +448,7 @@ class transmitobserver(CardObserver):
                                         serial_number = self.change_serial(serial_number)
                                         data = {'card_num': serial_number}
 
+                                        # 회원 보너스 사용중이면
                                         if self.config.get_config("data_collect_state") == "1":
                                             try:
                                                 member_info = requests.post("http://192.168.0.200:5000/get_vip_bonus", json=[], data=data)

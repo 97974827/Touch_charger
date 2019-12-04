@@ -200,6 +200,7 @@ class Main:
         self.rf_class.CHARGE_FLAG = True    # RFID 충전플래그 ON
         self.rf_class.LOOKUP_FLAG = False   # RFID 조회플래그 OFF
         self.rf_class.ISSUED_FLAG = True    # RFID 발급플래그 ON
+
         self.CHARGE_INIT_FLAG = True     # 뷰 충전 플래그 ON
 
         self.charge_phase1_state = False  # 충전 페이지1 음성 쓰레드 플래그 ON
@@ -296,9 +297,9 @@ class Main:
             self.charge_btn.config(state="active")
             self.issued_btn.config(state="active")
             self.lookup_btn.config(state="active")
-            self.rf_class.LOOKUP_FLAG = True    # RFID 조회 플래그 ON
             self.rf_class.CHARGE_FLAG = False   # RFID 충전 플래그 OFF
             self.rf_class.ISSUED_FLAG = False   # RFID 하단 충전 플래그 ON
+            self.rf_class.LOOKUP_FLAG = True  # RFID 조회 플래그 ON
             self.charge_phase2_thread.cancel()
 
         self.charge_phase2_thread = threading.Timer(second, self.charge_phase2, [i])
@@ -328,6 +329,7 @@ class Main:
 
     # 발급 시작
     def issued_init(self):
+        self.config.load_config()
         # 카드 1장 막기
         if not self.rf_class.ISSUED_ENABLE:
             if self.sound.get_busy():
@@ -343,7 +345,7 @@ class Main:
         self.issued_btn.config(state="disabled")
         self.lookup_btn.config(state="disabled")
 
-        self.issued_card.config(text="{} 원".format(str(self.CARD_MIN_MONEY)))
+        self.issued_card.config(text=self.my.number_format(self.config.get_config("card_price")) + " 원")
         self.raise_frame(self.issued_frame)
 
         self.ISSUED_INIT_FLAG = True       # 메인 발급 ON
@@ -362,6 +364,7 @@ class Main:
         self.issued_next_gif.config(state="disable")
         self.issued_next_btn_animate_stop()
 
+        # 지폐를 투입하여 주세요 쓰레드가 살아있다면 취소
         if self.charge_phase1_thread:
             self.charge_phase1_thread.cancel()
 
@@ -403,28 +406,35 @@ class Main:
                 try:
                     res = self.card.sendData("state")
                     if res == 4 or res == 5 or res == 2:
-                        self.bonus = 0
-                        self.rf_class.bonus = 0
+                        self.bonus = int(self.get_bonus(self.input_money))
+                        self.rf_class.bonus = int(self.get_bonus(self.input_money))
 
-                        card_price = int(self.CARD_MIN_MONEY)
-                        temp = card_price - self.bonus
+                        card_price = int(self.config.get_config("card_price"))  # 카드 가격
+                        temp = card_price - self.bonus  # 카드 가격에서 보너스를 뺌
                         total_use = 0
 
                         if int(temp) > 0:  # 카드가격이 남았다면
-                            print("카드 가격 남음")
                             input_money = self.input_money - temp
                             self.use_bonus = self.bonus
                             self.input_money -= temp
                             self.rf_class.input_money -= temp
                             self.rf_class.bonus = 0
                             self.bonus = 0
+
                         else:
-                            print("카드 가격 안남음")
                             self.bonus -= card_price
                             self.use_bonus = card_price
                             self.rf_class.bonus -= card_price
                             input_money = self.input_money
 
+                        dic = OrderedDict()
+                        dic['total_mny'] = str(total_use)
+                        dic['charge_mny'] = "0"
+                        dic['bonus_mny'] = "0"
+                        dic['card_price'] = str(card_price)
+                        dic['card_count'] = "1"
+
+                        self.config.set_total_table(dic)
                         self.card.sendData("disable")
                         self.charge_btn.config(state="active")
                         self.issued_btn.config(state="active")
@@ -456,7 +466,9 @@ class Main:
                         return
 
                 except Exception as e:
-                    print("issued err >> " + str(e))
+                    print("issued ERR >>")
+                    print(e)
+                    self.config.error_log(e, "issued() 에러")
             else:
                 self.sound.play_sound("./msgs/msg017.wav")
                 self.charge_btn.config(state="active")
@@ -544,6 +556,9 @@ class Main:
         self.rf_class.ISSUED_FLAG = False
         self.rf_class.LOOKUP_FLAG = True
         self.LOOKUP_INIT_FLAG = False
+        self.rf_class.member_class = ""
+        self.lookup_member_class_label.config(text="회원등급 : ")
+        self.lookup_member_class_label.place_forget()
 
         self.lookup_phase1_state = True
         self.lookup_phase1_second = 0
@@ -817,7 +832,7 @@ class Main:
         self.input_money -= use_input_mny
         self.temp_money -= use_input_mny
         self.input_cash = 0
-        self.bonus = 0
+        self.bonus = self.get_bonus(self.input_money)
         self.use_bonus = 0
 
         self.rf_class.input_cash = self.input_cash
@@ -843,7 +858,7 @@ class Main:
                 color = "red"
             self.main_input.config(text=" 투입금액       {} 원".format(str(total_mny)), fg=color)
         except Exception as e:
-            print("View money err >> " + e)
+            self.config.error_log(str(e), "change_money 에러")
 
     # 보너스 가져오기
     def get_bonus(self, input_mny):
@@ -998,6 +1013,7 @@ class Main:
         if not self.DEBUG:
             if 'Linux' in platform.system():
                 self.window.attributes('-fullscreen', True)
+
         self.init_shop_id_label.config(text="저장될 매장 ID : " + self.config.get_config("id"))
         self.init_card_start_enable_btn.place_forget()
         self.raise_frame(self.card_init_frame)
@@ -1018,7 +1034,7 @@ class Main:
                 self.init_card_label.config(text="매장 ID 입력 상태 : 실패", fg="red")
 
         if self.rf_class.charge_state == "1":
-            print("충전 상태 ON")
+            # print("충전 상태 ON")
             self.rf_class.CHARGE_FLAG = False
             self.rf_class.ISSUED_FLAG = False
             self.CHARGE_INIT_FLAG = False
@@ -1026,7 +1042,7 @@ class Main:
 
             # 금액 화면에 뷰
             self.charge2_input.config(text="{} 원".format(self.my.number_format(str(self.rf_class.total_money))))
-            self.init_money(self.rf_class.use_money)
+            self.init_money(self.rf_class.use_money)  # 충전하면 뷰금액 초기화
 
             # 충전 완료 화면으로 이동
             self.raise_frame(self.charge2_frame)
@@ -1047,7 +1063,7 @@ class Main:
             self.phase_end()
 
         if self.rf_class.lookup_state == "1":
-            print("조회 상태 ON")
+            # print("조회 상태 ON")
             # 잔액조회 화면의 금액 변경
             self.lookup_input.config(text="{} 원".format(self.my.number_format(self.rf_class.card_remain_money)))
             self.rf_class.LOOKUP_FLAG = False
@@ -1089,11 +1105,14 @@ class Main:
                     self.rf_class.input_money += bill_data
                     self.rf_class.current_money = self.input_cash
 
-                    bonus = 0
-                    self.rf_class.current_bonus = 0
+                    # 보너스
+                    bonus = int(self.get_bonus(self.input_money))  # 전체 투입금액에 대한 보너스 구함
 
-                    self.rf_class.bonus = int(bonus)    # 리더기에 사용할 변수에 투입금액에 대한 보너스 주입
-                    self.rf_class.current_bonus = int(self.input_money)  # 리더기에 사용할 변수에 투입금액에 대한 보너스 주입
+                    # 사용한 보너스 구함
+                    bonus -= self.use_bonus
+
+                    self.rf_class.bonus = int(bonus)  # 리더기에 사용할 변수에 투입금액에 대한 보너스 주입
+                    self.rf_class.current_bonus = int(self.get_bonus(self.input_money))  # 리더기에 사용할 변수에 투입금액에 대한 보너스 주입
 
                     total_view_mny = self.input_money + bonus  # 최종금액 = 투입금액 + 보너스
                     total_view_mny = self.my.number_format(total_view_mny)  # 최종 금액에 number format 작업
@@ -1119,7 +1138,7 @@ class Main:
                 if self.is_next_btn_animate():
                     self.next_btn_animate()
 
-                if self.input_money >= self.CARD_MIN_MONEY:
+                if self.input_money >= self.config.get_config("min_card_price"):
                     if self.is_issued_next_btn_animate():
                         self.issued_next_btn_animate()
                         self.issued_next_gif.config(state="active")
@@ -1132,7 +1151,8 @@ class Main:
                 self.change_money(0, 0, 0)
 
         except Exception as e:
-            print("bill_ui_thread_err : " + str(e))
+            print(e)
+            self.config.error_log(str(e), "bill_ui_thread_err")
 
         th = threading.Timer(second, self.bill_ui_thread)
         th.daemon = True
