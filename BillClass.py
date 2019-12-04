@@ -17,6 +17,7 @@ class Bill:
     INPUT_MONEY = 0     # 투입금액
     END = False
     global_second = 0
+    config = Config.Config()
 
     def sendData(self, temp_str):
         req = ""  # bytearray
