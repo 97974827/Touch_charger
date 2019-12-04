@@ -9,7 +9,8 @@ class Card:
     PORT = "COM6"  # 윈도우
     # PORT = "/dev/ttyUSB0"  # 리눅스
     if 'Linux' in platform.system():
-        PORT = "/dev/ttyUSB1"  # 리눅스
+        #PORT = "/dev/ttyUSB1"  # 리눅스
+        PORT = "/dev/ttyUSB0"  # 리눅스 라즈베리
     BAUD = "9600"
     ser = ""
 
