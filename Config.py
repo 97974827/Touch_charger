@@ -320,7 +320,7 @@ class Config:
         try:
             with conn.cursor() as cursor:
                 total_mny = dic['total_mny']
-                charge_mny = dic['charger_mny']
+                charge_mny = dic['charge_mny']
                 bonus_mny = dic['bonus_mny']
                 card_price = dic["card_price"]
                 card_count = dic["card_count"]
