@@ -334,8 +334,7 @@ class Config:
 
     # 충전된 카드 내역 계산하기
     def set_card_table(self, dic):
-        conn = pymysql.connect(host=self.MYSQL_HOST, port=self.MYSQL_PORT, user='pi', password='1234',
-                               charset='utf8mb4', db='glstech')
+        conn = pymysql.connect(host=self.MYSQL_HOST, port=self.MYSQL_PORT, user='pi', password='1234', charset='utf8mb4', db='glstech')
         curs = conn.cursor(pymysql.cursors.DictCursor)
         try:
             with conn.cursor() as cursor:
